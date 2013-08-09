@@ -1,0 +1,98 @@
+#include <SPI.h>
+#include <Ethernet.h>
+#include "Wire.h"
+#include <Adafruit_MCP23017.h>
+#include <Adafruit_RGBLCDShield.h>
+
+// assumes you have a YAC server or NCID server on your network to provide data to this device
+// code has been tested on:
+//         1) Arduino Uno R3 + Arduino Ethernet Sheild + adafruit LCD Shield Kit w/ 16x2 Character Display 
+//         2) Arduino Uno Ethernet + adafruit LCD Shield Kit w/ 16x2 Character Display
+// Make sure to download and install appropriate adafruit libraries before compiling
+
+// the media access control (ethernet hardware) address for the shield:
+byte mac[] = { 
+  0xED, 0xBE, 0xEF, 0xED, 0xFE, 0xAD };  //make sure you have a unique mac address for each Arduino YAC listener on your network
+//the IP address for the shield:
+byte ip[] = {                             //make sure you have a unique mac address for each Arduino YAC listener on your network
+  192, 168, 1, 18 };                      //note: code can be easily modified to support DHCP, but recommend not doing so
+// the router's gateway address:
+byte gateway[] = {                       //adjust as needed for your network
+  192, 168, 1, 1 };      
+// the subnet:
+byte subnet[] = { 
+  255, 255, 255, 0 };
+
+#define MSG_SIZE 300// Max message size
+String readString = String(MSG_SIZE);  //String to store incoming YAC Message
+
+// YAC default listener port is 10629
+EthernetServer server = EthernetServer(10629);
+Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
+
+void setup()
+{
+  // initialize the ethernet device
+  Ethernet.begin(mac, ip, gateway, subnet);
+
+  // start listening for clients
+  server.begin();
+  Serial.begin(9600);
+  Serial.println("Started.");
+  // set up the LCD's number of rows and columns: 
+  lcd.begin(16, 2);
+  lcd.setBacklight(HIGH);
+  lcd.print("BTCox YAC Lister");   // Print a message to the LCD at startup.
+  readString="";
+
+}
+
+void loop()
+{
+  // if an incoming client connects, there will be bytes available to read:
+  EthernetClient client = server.available();
+  if (client == true) {
+    while (client.connected()) {
+      if (client.available()) {
+        char c = client.read();  //read char by char HTTP request
+
+        if (readString.length() < 300 )
+        {
+          //store characters to string
+          readString += c; 
+        }
+        //output chars to serial port
+        Serial.print(c);
+      }
+    }
+    Serial.print('\n');
+    if (readString.indexOf("@") <0) //YAC message, not Caller ID packet
+    {
+  //    Serial.print("Not YAC CID\n");
+      //should break up first 80 char and properly format, but for now...
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print(readString);
+      readString="";
+    }
+    else // YAC Caller ID packet, need to parse and format
+    {
+ //     Serial.print("YAC CID\n");
+      lcd.clear(); 
+      lcd.setCursor(0,0);
+ //     Serial.print(readString);
+      int loc = readString.indexOf("~");
+      String name = readString.substring(5,min(25,loc));
+      Serial.println(name);
+      lcd.print(name);
+      lcd.setCursor(0,1);
+      String number = readString.substring((loc+1));
+      Serial.println(number);
+      lcd.print(number);
+      readString="";
+    }
+  }
+}
+
+
+
